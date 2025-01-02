@@ -3,7 +3,6 @@ name: Rust CI
 on:
   push:
     branches: [main]
-  merge_group:
   pull_request:
   workflow_dispatch:
 
@@ -13,46 +12,48 @@ env:
 jobs:
   cargo-tests:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        rust: [stable, beta, nightly]
     steps:
       - uses: actions/checkout@v4
-      - uses: taiki-e/install-action@just
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@${{ matrix.rust }}
       - name: Cache
         uses: actions/cache@v3
-        continue-on-error: false
         with:
           path: |
             ~/.cargo/registry/index/
             ~/.cargo/registry/cache/
             ~/.cargo/git/db/
-            world-chain-builder/target/
-          key: cargo-test-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: cargo-test-
-      - uses: taiki-e/install-action@nextest
-      - name: tests
-        run: just test
+            target/
+          key: cargo-test-${{ runner.os }}-${{ matrix.rust }}-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            cargo-test-${{ runner.os }}-${{ matrix.rust }}-
+            cargo-test-
+      - name: Run tests
+        run: cargo test
 
   cargo-lint:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
-    name: lint
+    needs: []
     steps:
       - uses: actions/checkout@v4
-      - uses: taiki-e/install-action@just
       - uses: dtolnay/rust-toolchain@nightly
         with:
           components: rustfmt, clippy
       - name: Cache
         uses: actions/cache@v3
-        continue-on-error: false
         with:
           path: |
             ~/.cargo/registry/index/
             ~/.cargo/registry/cache/
             ~/.cargo/git/db/
-            world-chain-builder/target/
-          key: cargo-test-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: cargo-test-
-      - name: fmt + lint
-        run: just fmt
-
+            target/
+          key: cargo-lint-${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            cargo-lint-${{ runner.os }}-
+            cargo-lint-
+      - name: Check formatting
+        run: cargo fmt --check
+      - name: Run clippy
+        run: cargo clippy --all-targets --all-features -- -D warnings
